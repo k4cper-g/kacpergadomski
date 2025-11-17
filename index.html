@@ -208,6 +208,50 @@
                 font-size: 1rem;
             }
         }
+
+        /* Fullscreen expand animation */
+        .preview-expanding {
+            position: fixed !important;
+            pointer-events: all !important;
+            z-index: 9999 !important;
+            transition: all 0.6s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
+            border-radius: 8px;
+            transform-origin: center center !important;
+        }
+
+        .preview-fullscreen {
+            border-radius: 0 !important;
+        }
+
+        body.transitioning {
+            overflow: hidden;
+        }
+
+        /* Iframe overlay for smooth transition */
+        .iframe-container {
+            position: fixed;
+            z-index: 9999;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            will-change: transform, border-radius;
+        }
+
+        .iframe-container.animating {
+            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1),
+                        border-radius 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+
+        .iframe-container.fullscreen {
+            border-radius: 0 !important;
+        }
+
+        .iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #141414;
+        }
     </style>
 </head>
 <body>
@@ -284,5 +328,117 @@
             </div>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get all role links with previews
+            const roleLinks = document.querySelectorAll('.role-link');
+            const preloadedIframes = new Map();
+
+            roleLinks.forEach(link => {
+                // Preload iframe on hover
+                link.addEventListener('mouseenter', function() {
+                    const targetUrl = this.href;
+
+                    // Only preload if not already preloaded
+                    if (!preloadedIframes.has(targetUrl)) {
+                        const iframe = document.createElement('iframe');
+                        iframe.src = targetUrl;
+                        iframe.style.position = 'fixed';
+                        iframe.style.top = '-9999px';
+                        iframe.style.left = '-9999px';
+                        iframe.style.width = '1px';
+                        iframe.style.height = '1px';
+                        iframe.style.opacity = '0';
+                        iframe.style.pointerEvents = 'none';
+                        document.body.appendChild(iframe);
+                        preloadedIframes.set(targetUrl, iframe);
+                    }
+                });
+
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    const preview = this.querySelector('.link-preview');
+                    const targetUrl = this.href;
+
+                    if (!preview) {
+                        window.location.href = targetUrl;
+                        return;
+                    }
+
+                    // Get the current position of the preview
+                    const rect = preview.getBoundingClientRect();
+
+                    // Create iframe container to load the actual website
+                    const iframeContainer = document.createElement('div');
+                    iframeContainer.className = 'iframe-container';
+
+                    // Set the container to full viewport size but positioned at the preview location
+                    iframeContainer.style.top = '0px';
+                    iframeContainer.style.left = '0px';
+                    iframeContainer.style.width = '100vw';
+                    iframeContainer.style.height = '100vh';
+
+                    // Calculate scale to make it appear at preview size initially
+                    const scaleX = rect.width / window.innerWidth;
+                    const scaleY = rect.height / window.innerHeight;
+                    const initialScale = Math.min(scaleX, scaleY);
+
+                    // Calculate translation to position at preview location
+                    const centerX = window.innerWidth / 2;
+                    const centerY = window.innerHeight / 2;
+                    const previewCenterX = rect.left + rect.width / 2;
+                    const previewCenterY = rect.top + rect.height / 2;
+                    const translateX = previewCenterX - centerX;
+                    const translateY = previewCenterY - centerY;
+
+                    // Set initial transform to match preview position and size
+                    iframeContainer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${initialScale})`;
+                    iframeContainer.style.transformOrigin = 'center center';
+
+                    // Use preloaded iframe if available, otherwise create new one
+                    let iframe;
+                    if (preloadedIframes.has(targetUrl)) {
+                        iframe = preloadedIframes.get(targetUrl);
+                        // Reset iframe styles for visible display
+                        iframe.style.position = '';
+                        iframe.style.top = '';
+                        iframe.style.left = '';
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.style.opacity = '';
+                        iframe.style.pointerEvents = '';
+                    } else {
+                        iframe = document.createElement('iframe');
+                        iframe.src = targetUrl;
+                    }
+
+                    iframeContainer.appendChild(iframe);
+
+                    // Add to body
+                    document.body.appendChild(iframeContainer);
+                    document.body.classList.add('transitioning');
+
+                    // Force reflow
+                    iframeContainer.offsetHeight;
+
+                    // Enable transitions and trigger fullscreen animation
+                    requestAnimationFrame(() => {
+                        iframeContainer.classList.add('animating');
+                        requestAnimationFrame(() => {
+                            iframeContainer.style.transform = 'translate(0px, 0px) scale(1)';
+                            iframeContainer.classList.add('fullscreen');
+                        });
+                    });
+
+                    // After animation completes, navigate to the actual page
+                    setTimeout(() => {
+                        window.location.href = targetUrl;
+                    }, 800);
+                });
+            });
+        });
+    </script>
 </body>
 </html>
